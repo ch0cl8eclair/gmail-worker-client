@@ -1,0 +1,12 @@
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build
+
+logs
+*.log
+src/main/resources/credentials.json
+src/main/python/env
+*.csv
+
