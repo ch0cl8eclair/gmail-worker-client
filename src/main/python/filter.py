@@ -4,17 +4,22 @@ import argparse
 from pathlib import Path
 
 
+# Simple process to read in a csv file, filter duplicates and write out to a new file.
+# python filter.py linkedInAlerts-$(TODAY).csv
+# this will output to a file called: linkedInAlerts-$(TODAY)-filtered.csv
+
 def generate_output(given_file, dataframe):
     output_file = Path(given_file.parent, "{0}-{2}{1}".format(given_file.stem, given_file.suffix, "filtered"))
     print("Outputting data to file:", output_file)
-    dataframe.to_csv(output_file)
+    dataframe.to_csv(output_file, index=False, header=False)
 
 def process_csv_file(given_file):
-    original_data_df = pd.read_csv(given_file)
+    colnames=['Date', 'title', 'Company', 'Location', 'Description', 'Link']
+    original_data_df = pd.read_csv(given_file, names=colnames, header=None)
     original_length = len(original_data_df.index)
-    deduped_df = original_data_df.drop_duplicates()
+    deduped_df = original_data_df.drop_duplicates(subset=['Link'], keep='first')
     new_length=len(deduped_df.index)
-    print(f"Rows reduced to {new_length} from {original_length}")
+    print(f"Rows reduced from: {original_length} to {new_length} rows")
     generate_output(given_file, deduped_df)
 
 def main():

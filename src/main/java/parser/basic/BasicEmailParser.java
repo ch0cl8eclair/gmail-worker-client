@@ -14,7 +14,8 @@ public class BasicEmailParser implements MessageParser {
         String messageSubject = headers.stream().filter(s -> s.getName().equalsIgnoreCase("SUBJECT")).map(MessagePartHeader::getValue).findFirst().orElse("Not Found");
         String messageSender  = headers.stream().filter(s -> s.getName().equalsIgnoreCase("FROM")).map(MessagePartHeader::getValue).findFirst().orElse("Not Found");
         String messageFrom    = headers.stream().filter(s -> s.getName().equalsIgnoreCase("TO")).map(MessagePartHeader::getValue).findFirst().orElse("Not Found");
-
+        String messageSentDate = headers.stream().filter(s -> s.getName().equalsIgnoreCase("DATE")).map(MessagePartHeader::getValue).findFirst().orElse("Not Found");
+        System.out.println("Message sent date is: " + messageSentDate);
         return List.of(new BasicEmail(internalDate, messageFrom, messageSender, messageSubject));
     }
 

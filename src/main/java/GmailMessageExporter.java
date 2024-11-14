@@ -16,6 +16,7 @@ import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.*;
 import com.google.common.collect.Lists;
+import parser.linkedin.LinkedInAlert;
 import utils.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +28,10 @@ import parser.linkedin.LinkedInJobAlertEmailParser;
 import java.io.*;
 import java.security.GeneralSecurityException;
 import java.util.*;
+import java.util.stream.Collectors;
+
+import static utils.Util.addFileSuffix;
+import static utils.Util.outputListToFile;
 
 /* class to demonstrate use of Gmail list labels API */
 
@@ -57,10 +62,11 @@ public class GmailMessageExporter {
    * If modifying these scopes, delete your previously saved tokens/ folder.
    */
   // private static final List<String> SCOPES = Arrays.asList(GmailScopes.GMAIL_LABELS, GmailScopes.GMAIL_READONLY, GmailScopes.GMAIL_METADATA);
-  private static final List<String> SCOPES = Collections.singletonList(GmailScopes.GMAIL_READONLY);
+  private static final List<String> SCOPES = Collections.singletonList(GmailScopes.GMAIL_MODIFY);
   private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
-  private enum COMMANDS {LABELS, SEARCH, LIST}
+  // TODO remove delete option later
+  private enum COMMANDS {LABELS, SEARCH, LIST, DELETE}
 
   private static final String USAGE = """
           GmailMessageExporter command
@@ -80,6 +86,7 @@ public class GmailMessageExporter {
           - messageSearchQuery - gmail search query string
           - messageSearchQueryLimit - max search query results to return.
           """;
+
   /**
    * Creates an authorized Credential object.
    *
@@ -229,8 +236,13 @@ public class GmailMessageExporter {
     // batch fetch message
     List<Message> fullMessages = batchFetch(service, partialMessages);
 
-    List<? extends CSVRecord> records = fullMessages.stream()
-            .filter(it -> filterMessageBySender(it, configuredEmailSenderFilter))
+    // TODO capture post filter msg ids for deletion purposes
+    // Get the base list with filtered email messages
+    List<Message> filteredMessagesList = fullMessages.stream().filter(it -> filterMessageBySender(it, configuredEmailSenderFilter)).toList();
+    // Perform the first operation to get the email message ids from the base list
+    Set<String> messageIds = filteredMessagesList.stream().map(it -> it.getId()).collect(Collectors.toSet());
+    // Performs the second operation to parse the emails from the base list
+    List<? extends CSVRecord> records = filteredMessagesList.stream()
             .map(parser::parse)
             .flatMap(Collection::stream)
             .toList();
@@ -238,6 +250,45 @@ public class GmailMessageExporter {
 
     outputObjectsAsCSVToFile(records, parser.getCSVOutputFilename());
     logger.info("Number of output records found is: {}", records.size());
+    if (parser instanceof LinkedInJobAlertEmailParser) {
+      outputUniqueLinkedinUrlsToFile((List<LinkedInAlert>) records, addFileSuffix(parser.getCSVOutputFilename(), "urls", "txt"));
+    }
+    deleteProcessedEmailMessages(service, messageIds);
+  }
+
+  private static void outputUniqueLinkedinUrlsToFile(List<LinkedInAlert> records, String outputFilename) {
+    List<String> urls = records.stream().map(LinkedInAlert::link).distinct().toList();
+    outputListToFile(urls, outputFilename);
+  }
+
+  private static void deleteProcessedEmailMessages(Gmail service, Set<String> messageIds) {
+    Configuration parserConfiguration = Configuration.getInstance();
+    int msgLength = messageIds != null ? messageIds.size() : 0;
+    if (!parserConfiguration.deleteEmailMessages() || msgLength < 1){
+      return;
+    }
+
+    logger.info("Message ids to delete are: " + String.join(", ", messageIds));
+
+    final JsonBatchCallback<Message> callback = new JsonBatchCallback<Message>() {
+      public void onSuccess(Message message, HttpHeaders responseHeaders) {
+        logger.info("Processed gmail messages have been deleted");
+      }
+
+      public void onFailure(GoogleJsonError e, HttpHeaders responseHeaders) {
+        logger.error("Failed to delete processed gmail message: " + e.getMessage());
+      }
+    };
+
+    try {
+      BatchRequest batch = service.batch();
+      for (String messageId : messageIds) {
+        service.users().messages().trash("me", messageId).queue(batch, callback);
+      }
+      batch.execute();
+    } catch (IOException io) {
+      logger.error("Failed to successfully delete processed gmail msgs, " + io.getMessage(), io);
+    }
   }
 
   private static boolean filterMessageBySubject(Message message, String subject) {
@@ -300,6 +351,13 @@ public class GmailMessageExporter {
 
       case LABELS:
         outputLabels(service);
+        break;
+
+      case DELETE:
+        String[] messages = new String[] {"1930180cb567165f", "19301be07bb71986", "19301edeeec03d46", "193030179957b913", "193036f3403162c9", "19303a637d968bdf"};
+        Set<String> msgsIdsToDelete = new HashSet<>();
+        Collections.addAll(msgsIdsToDelete, messages);
+        deleteProcessedEmailMessages(service, msgsIdsToDelete);
         break;
 
       default:

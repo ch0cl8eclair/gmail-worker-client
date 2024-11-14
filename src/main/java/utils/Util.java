@@ -3,7 +3,10 @@ package utils;
 import com.google.api.services.gmail.model.Message;
 import com.google.api.services.gmail.model.MessagePart;
 import com.google.api.services.gmail.model.MessagePartHeader;
+import parser.CSVRecord;
 
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -47,5 +50,21 @@ public class Util {
         boolean isRequestedMessagePart = messagePartType.contentValue.equals(messagePartConentValue);
         //boolean isRequestedMessagePart = messageContentType.ifPresent(it -> it.equals(messagePartType.contentValue));
         return isRequestedMessagePart;
+    }
+
+    public static String addFileSuffix(String csvOutputFilename, String suffix, String extension) {
+        if (csvOutputFilename == null || csvOutputFilename.length() < 1) {
+            return String.format("%s-%s.txt", "myfile", suffix);
+        }
+        String[] filenameSplit = csvOutputFilename.split("\\.");
+        return String.format("%s-%s.%s", filenameSplit[0], suffix, extension);
+    }
+
+    public static void outputListToFile(List<String> data, String filename) {
+        try (PrintWriter out = new PrintWriter(filename)) {
+            data.forEach(it -> out.println(it));
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
     }
 }

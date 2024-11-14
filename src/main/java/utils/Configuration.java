@@ -10,7 +10,7 @@ import java.util.Properties;
 public class Configuration {
     private static final String CONFIGURATION_FILE = "configuration.properties";
 
-    private record MailParserConfiguration(String emailSenderFilter, String emailSubjectFilter, String emailSearchQuery, long maxSearchResultsLimit, boolean outputMessagesToFile) {}
+    private record MailParserConfiguration(String emailSenderFilter, String emailSubjectFilter, String emailSearchQuery, long maxSearchResultsLimit, boolean outputMessagesToFile, boolean deleteEmailMessages) {}
 
     private static Configuration instance;
 
@@ -25,6 +25,7 @@ public class Configuration {
         try {
             props.load(Configuration.class.getClassLoader().getResourceAsStream(CONFIGURATION_FILE));
             boolean outputMessagesFlag = Boolean.parseBoolean(props.getProperty("writeMessagesToFile", "false"));
+            boolean deleteProcessedEmailMessagesFlag = Boolean.parseBoolean(props.getProperty("deleteProcessedEmailMessages", "false"));
 
             long maxSearchResults;
             try {
@@ -38,7 +39,8 @@ public class Configuration {
                     props.getProperty("subjectEmailFilter"),
                     props.getProperty("messageSearchQuery"),
                     maxSearchResults,
-                    outputMessagesFlag);
+                    outputMessagesFlag,
+                    deleteProcessedEmailMessagesFlag);
             props = null;
         } catch (IOException e) {
             System.err.println("Failed to load configuration file: " + CONFIGURATION_FILE);
@@ -87,5 +89,9 @@ public class Configuration {
 
     public long getMailSearchQueryResultsLength() {
         return parserConfiguration.maxSearchResultsLimit;
+    }
+
+    public boolean deleteEmailMessages() {
+        return parserConfiguration.deleteEmailMessages();
     }
 }
